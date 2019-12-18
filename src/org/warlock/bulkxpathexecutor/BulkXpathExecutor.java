@@ -202,8 +202,9 @@ public class BulkXpathExecutor {
                 System.out.println(sb.toString());
             } else {
                 ArrayList<String> subs = substitutions.get(s);
-                if (subs == null)
+                if (subs == null) {
                     continue;
+                }
                 for (int i = 0; i < nl.getLength(); i++) {
                     Node n = nl.item(i);
                     try {
