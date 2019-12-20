@@ -16,10 +16,12 @@
 package org.warlock.bulkxpathexecutor;
 
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileReader;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.PrintStream;
 import java.io.StringReader;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -48,39 +50,84 @@ import org.xml.sax.InputSource;
  */
 public class BulkXpathExecutor {
 
-    private static final String USAGE = "Usage: java -jar BulkXpathExecutor.jar -p pathsfile [ -r datafile ] [ -o outputfile ] [ documentfile | - ]";
+    private static final String USAGE = "Usage: java -jar BulkXpathExecutor.jar -p pathsfile [ -r datafile ] [ -m ] [ -M ] [ -f ] [ -t ] [ -o outputfile ] [ -e errorfile ] [ -x extension ] [ -X extension ] [ documentfile | - ]";
     private HashMap<String,DescribedXPath> expressions = new HashMap<>();
     private HashMap<String,ArrayList<String>> substitutions = null;
     private NamespaceContext nhsdNS = CfHNamespaceContext.getXMLNamespaceContext();
     private static final SimpleDateFormat ISO8601TIME = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss");
     private static final SimpleDateFormat ISO8601DATE = new SimpleDateFormat("yyyy-MM-dd");
+    
+    private OutputManager outputManager = null;
+
     /**
      * @param args the command line arguments
      */
     public static void main(String[] args) {
         String paths = null;
         String data = null;
-        String doc = null;
-        
-        for (int i = 0; i < args.length; i++) {
-            if (args[i].contentEquals("-p")) {
-                ++i;
-                paths = args[i];
-                continue;
+        ArrayList<String> doc = new ArrayList<>();
+        String outfile = null;
+        OutputManager om = new OutputManager();
+        try {
+            for (int i = 0; i < args.length; i++) {
+                if (args[i].contentEquals("-p")) {
+                    ++i;
+                    paths = args[i];
+                    continue;
+                }
+                if (args[i].contentEquals("-r")) {
+                    ++i;
+                    data = args[i];
+                    continue;
+                }
+                if (args[i].contentEquals("-o")) {
+                    ++i;
+                    om.setOutputFile(args[i]);
+                    continue;
+                }            
+                if (args[i].contentEquals("-e")) {
+                    ++i;
+                    om.setErrorFile(args[i]);
+                    continue;
+                }            
+                if (args[i].contentEquals("-x")) {
+                    ++i;
+                    om.setOutputExtension(args[i]);
+                    continue;
+                }            
+                if (args[i].contentEquals("-X")) {
+                    ++i;
+                    om.setErrorExtension(args[i]);
+                    continue;
+                }            
+                if (args[i].contentEquals("-m")) {
+                    om.setInMemoryOutput();
+                    continue;
+                }            
+                if (args[i].contentEquals("-M")) {
+                    om.setInMemoryError();
+                    continue;
+                }            
+                if (args[i].contentEquals("-f")) {
+                    om.setPrependFilenameToError(true);
+                    continue;
+                }            
+                if (args[i].contentEquals("-t")) {
+                    om.setTimestampError(true);
+                    continue;
+                }            
+                doc.add(args[i]);
             }
-            if (args[i].contentEquals("-r")) {
-                ++i;
-                data = args[i];
-                continue;
-            }
-            doc = args[i];
+        }
+        catch (Exception e) {
+            e.printStackTrace();
         }
         if (paths == null) {
             System.err.println("Paths file not given");
             System.err.println(USAGE);
             System.exit(1);
         }
-        if (doc == null) {
+        if (doc.isEmpty()) {
             System.err.println("Document source not given");
             System.err.println(USAGE);
             System.exit(1);
@@ -92,15 +139,28 @@ public class BulkXpathExecutor {
         }
         try {
             BulkXpathExecutor bxe = new BulkXpathExecutor(paths);
+            bxe.setOutputManager(om);
             bxe.setData(data);
-            bxe.process(doc);
+            bxe.processDocuments(doc);
+            ArrayList<String> errors = bxe.getOutputManager().getErrors();
+            if ((errors != null) && (!errors.isEmpty())) {
+                System.err.println("Non-fatal processing errors:");
+                for (String s : errors) {
+                    System.err.println(s);
+                }
+            }
         }
         catch(Exception e) {
             e.printStackTrace();
         }
     }
     
-    BulkXpathExecutor(String paths) 
+    /**
+     * 
+     * @param paths
+     * @throws Exception 
+     */
+    public BulkXpathExecutor(String paths) 
             throws Exception
     {
         @SuppressWarnings("UnusedAssignment")
@@ -134,7 +194,28 @@ public class BulkXpathExecutor {
         }
     }
     
-    void setData(String d)
+    public void setOutputManager(OutputManager om) { outputManager = om; }
+
+    public OutputManager getOutputManager() { return outputManager; }
+    
+    public void processDocuments(ArrayList<String> d)
+            throws Exception
+    {
+        if (outputManager == null)
+            outputManager = new OutputManager();
+        
+        for (String s : d) {
+            outputManager.setCurrentFile(s);
+            process(s);
+        }
+    }
+      
+    /**
+     *
+     * @param d
+     * @throws Exception
+     */
+    public void setData(String d)
             throws Exception
     {
         if (d == null)
@@ -142,6 +223,7 @@ public class BulkXpathExecutor {
         
         substitutions = new HashMap<>();
         BufferedReader br = new BufferedReader(new FileReader(d));
+        @SuppressWarnings("UnusedAssignment")
         String line = null;
         while ((line = br.readLine()) != null) {
             String[] s = line.split("\t");
@@ -173,9 +255,12 @@ public class BulkXpathExecutor {
         return s;
     }
     
-    void process(String doc) 
+    private void process(String doc) 
             throws Exception
     {
+        boolean streamOutput = true;
+        
+        @SuppressWarnings("UnusedAssignment")
         Document d = getDocument(doc);
         for(String s : expressions.keySet()) {
             DescribedXPath xp = expressions.get(s);
@@ -199,7 +284,7 @@ public class BulkXpathExecutor {
                     sb.append(n.getNodeValue());
                     sb.append(System.getProperty("line.separator"));
                 }
-                System.out.println(sb.toString());
+                outputManager.output(sb.toString());
             } else {
                 ArrayList<String> subs = substitutions.get(s);
                 if (subs == null) {
@@ -215,9 +300,12 @@ public class BulkXpathExecutor {
                                 elem = (Element)d.importNode(elem, true);
                                 n.getParentNode().replaceChild(elem, n);
                             } else {
-                                System.err.println("WARNING: Ignoring substitution. Attempt to substitute XML fragment " 
-                                        + v.substring("xmlfragment:".length()) + " into non-element location "
-                                        + xp.getXpath() + ": XML fragment substitutions can only be made into elements.");
+                                StringBuilder erep = new StringBuilder("WARNING: Ignoring substitution. Attempt to substitute XML fragment "); 
+                                erep.append(v.substring("xmlfragment:".length()));
+                                erep.append(" into non-element location ");
+                                erep.append(xp.getXpath());
+                                erep.append(": XML fragment substitutions can only be made into elements.");
+                                outputManager.error(erep.toString());
                             }
                         } else {
                             if (v.startsWith("$")) {
@@ -227,7 +315,12 @@ public class BulkXpathExecutor {
                                     v = vs.get(i);
                                     n.setNodeValue(v);
                                 } else {
-                                    System.err.println("WARNING: Ignoring substitution. Label " + s + " references another: " + v + " which is not defined.");
+                                    StringBuilder erep = new StringBuilder("WARNING: Ignoring substitution. Label ");
+                                    erep.append(s);
+                                    erep.append(" references another: ");
+                                    erep.append(v);
+                                    erep.append(" which is not defined.");
+                                    outputManager.error(erep.toString());
                                 }
                             } else {
                                 n.setNodeValue(v);
@@ -241,8 +334,7 @@ public class BulkXpathExecutor {
             }
         }
         if (substitutions != null) {
-            String output = getStringFromDoc(d);
-            System.out.println(output);
+            outputManager.output(getStringFromDoc(d));
         }
     }
     
