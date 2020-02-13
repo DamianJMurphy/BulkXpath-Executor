@@ -22,6 +22,8 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.StringReader;
 import java.text.SimpleDateFormat;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
@@ -224,11 +226,14 @@ public class BulkXpathExecutor {
         @SuppressWarnings("UnusedAssignment")
         String line = null;
         while ((line = br.readLine()) != null) {
+            if (line.startsWith("#")) {
+                continue;
+            }
             String[] s = line.split("\t");
             ArrayList<String> list = new ArrayList<>();
             for (int i = 1; i < s.length; i++) {
                 if (s[i].startsWith("$")) {
-                    list.add(resolveFunction(s[i]));
+                    list.add(resolveFunction(s[i]).trim());
                 } else {
                     list.add(s[i]);
                 }
@@ -239,11 +244,19 @@ public class BulkXpathExecutor {
     
     private String resolveFunction(String s) {
         
-        if (s.startsWith("$TIME")) {
+        // TODO: Add ISO8601 duration offsets to $TIME and $DATE
+        if (s.contentEquals("$TIME")) {
             return ISO8601TIME.format(new Date());
         }
-        if (s.startsWith("$DATE")) {
+        if (s.contentEquals("$DATE")) {
             return ISO8601DATE.format(new Date());
+        }
+        
+        if (s.startsWith("$TIME")) {
+            return resolveOffset(s, false);
+        }
+        if (s.startsWith("$DATE")) {
+            return resolveOffset(s, true);
         }
         if (s.startsWith("$UUID")) {
             return UUID.randomUUID().toString().toLowerCase();
@@ -253,6 +266,22 @@ public class BulkXpathExecutor {
         return s;
     }
     
+    private String resolveOffset(String spec, boolean dt) {
+        
+        String d = spec.substring("$TIME".length()).trim();
+        
+        Duration offset = Duration.parse(d);
+        Instant now = Instant.now();
+        @SuppressWarnings("UnusedAssignment")
+        Instant then = null;
+        then = now.plus(offset);
+        // Should be ISO-8601 anyway
+        if(!dt)
+            return then.toString();
+        String t = then.toString();
+        return t.substring(0, t.indexOf("T"));
+    }
+        
     private void process(String doc) 
             throws Exception
     {
