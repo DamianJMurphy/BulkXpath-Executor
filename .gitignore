@@ -1,0 +1,23 @@
+# IntelliJ IDEA #
+*.iml
+.idea
+
+# Eclipse #
+.classpath
+.metadata
+.project
+.recommenders
+.settings
+.springBeans
+
+# NetBeans #
+nb-configuration.xml
+nbactions.xml
+nbproject
+
+# Config #
+/mygitpush.sh
+/mygitcommit.sh
+
+/target
+/src/test/resources/output.xml

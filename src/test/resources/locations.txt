@@ -1,0 +1,5 @@
+P1	/fhir:Bundle[1]/fhir:entry[1]/fhir:resource[1]/fhir:Condition[1]/fhir:id[1]/@value
+P2	/fhir:Bundle[1]/fhir:entry[2]/fhir:resource[1]/fhir:Condition[1]/fhir:id[1]/@value
+P3	/fhir:Bundle[1]/fhir:entry[3]/fhir:resource[1]/fhir:Condition[1]/fhir:id[1]/@value
+D1	/fhir:Bundle[1]/fhir:entry[1]/fhir:resource[1]/fhir:Condition[1]/fhir:onsetDateTime[1]/@value
+D2	/fhir:Bundle[1]/fhir:entry[1]/fhir:resource[1]/fhir:Condition[1]/fhir:assertedDate[1]/@value
