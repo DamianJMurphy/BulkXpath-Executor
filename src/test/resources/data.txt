@@ -1,5 +1,10 @@
-P1	stuff
+#
+# data file for providing conent to be inserted into xml template files
+#
+P1	plain text
 P2	$P1
 P3	$DATE
-D1	$TIMEP1DT1H1M
+#D1	$TIMEP1DT1H1M
+D1	$TODAYPT9H
 D2	$DATEP1DT1H1M
+C1	xmlfragment: <fhir:a xmlns:fhir="http://hl7.org/fhir">xxx</fhir:a>
