@@ -134,7 +134,7 @@ public class OutputManager {
         }
     }
     
-    private void close() 
+    public void close() 
             throws Exception
     {
         if ((outputMethod == SINGLEFILE) || (outputMethod == MULTIFILE)) {
@@ -151,7 +151,7 @@ public class OutputManager {
         }
     }
     
-    private ArrayList<String> getOutputs() { return outputList; }
+    public ArrayList<String> getOutputs() { return outputList; }
     public ArrayList<String> getErrors() { return errorList; }
     
     public void error(String s)

@@ -20,7 +20,6 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
-import java.util.ArrayList;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -35,6 +34,7 @@ import static org.junit.jupiter.api.Assertions.*;
 public class BulkXpathExecutorTest {
 
     private File outputFile = null;
+    private static final String TEST_ROOT = "src/test/resources/";
 
     public BulkXpathExecutorTest() {
     }
@@ -49,7 +49,7 @@ public class BulkXpathExecutorTest {
 
     @BeforeEach
     public void setUp() {
-        outputFile = new File("src/test/resources/output.xml");
+        outputFile = new File(TEST_ROOT + "/output.xml");
         if (outputFile.exists()) {
             outputFile.delete();
         }
@@ -67,7 +67,7 @@ public class BulkXpathExecutorTest {
     public void testMain() throws FileNotFoundException, IOException {
         System.out.println("main");
 
-        String[] args = new String[]{"-p", "src/test/resources/locations.txt", "-r", "src/test/resources/data.txt", "-o", outputFile.getPath(), "src/test/resources/problems_resp.xml"};
+        String[] args = new String[]{"-p", TEST_ROOT + "/locations.txt", "-r", TEST_ROOT + "/data.txt", "-o", outputFile.getPath(), TEST_ROOT + "/problems_resp.xml"};
         BulkXpathExecutor.main(args);
         assertTrue(outputFile.exists());
         try (BufferedReader br = new BufferedReader(new FileReader(outputFile))) {

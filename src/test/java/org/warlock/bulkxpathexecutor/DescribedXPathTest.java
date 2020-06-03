@@ -70,6 +70,7 @@ public class DescribedXPathTest {
 
     /**
      * Test of getExpression method, of class DescribedXPath.
+     * @throws javax.xml.xpath.XPathExpressionException
      */
     @Test
     public void testGetExpression() throws XPathExpressionException {

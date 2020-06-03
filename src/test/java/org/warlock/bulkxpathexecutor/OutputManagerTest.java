@@ -53,20 +53,28 @@ public class OutputManagerTest {
 
     /**
      * Test of setInMemoryOutput method, of class OutputManager.
+     * @throws java.lang.Exception
      */
     @Test
-    public void testSetInMemoryOutput() {
+    public void testSetInMemoryOutput() throws Exception {
         System.out.println("setInMemoryOutput");
         instance.setInMemoryOutput();
+        String expResult = "test";
+        instance.output(expResult);
+        assertEquals(expResult, instance.getOutputs().get(0));
     }
 
     /**
      * Test of setInMemoryError method, of class OutputManager.
+     * @throws java.lang.Exception
      */
     @Test
-    public void testSetInMemoryError() {
+    public void testSetInMemoryError() throws Exception {
         System.out.println("setInMemoryError");
         instance.setInMemoryError();
+        String expResult = "test";
+        instance.error(expResult);
+        assertEquals(expResult, instance.getErrors().get(0));
     }
 
     /**
@@ -173,6 +181,27 @@ public class OutputManagerTest {
         System.out.println("output");
         String s = "";
         instance.output(s);
+    }
+
+    /**
+     * Test of close method, of class OutputManager.
+     * @throws java.lang.Exception
+     */
+    @Test
+    public void testClose() throws Exception {
+        System.out.println("close");
+        instance.close();
+    }
+
+    /**
+     * Test of getOutputs method, of class OutputManager.
+     */
+    @Test
+    public void testGetOutputs() {
+        System.out.println("getOutputs");
+        ArrayList<String> expResult = null;
+        ArrayList<String> result = instance.getOutputs();
+        assertEquals(expResult, result);
     }
 
 }

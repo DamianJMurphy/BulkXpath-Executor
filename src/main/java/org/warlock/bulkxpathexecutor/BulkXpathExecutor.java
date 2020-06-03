@@ -53,7 +53,22 @@ import org.warlock.util.CfHNamespaceContext;
 import org.xml.sax.InputSource;
 
 /**
- *
+ * Usage: java -jar BulkXpathExecutor.jar -p pathsfile [ -r datafile ] [ -m ] [ -M ] [ -f ] [ -t ] [ -o outputfile ] [ -e errorfile ] [ -x extension ] [ -X extension ] [ documentfile+ | - ]
+ * 
+ * Takes well formed xml input files and bulk modifies and outputs them as well formed modified xml files according to data in paths and data files.
+ * 
+ * @param -p &lt;paths file&gt; tab separated file containing pairs of identifiers and xpaths. Comments start with #. Associates an identifier with an xpath
+ * @param -r &lt;data file&gt; optional tab separated file containing pairs of identifiers and data values to be assigned to those identifiers. Comments start with #. Associates an identifier with a value to be applied in output file.
+ * @param -m optional set in memory output Outputs are written to lists of string (for using this jar as a library)
+ * @param -M optional set in memory error Errors are written to lists of string (for using this jar as a library)
+ * @param -f optional prepend filename to error
+ * @param -t optional include a timestamp with the error
+ * @param -o optional &lt;output file&gt; path to file to which modified xml file is to be output
+ * @param -e optional &lt;error file&gt; path to file to which modification errors are to be output
+ * @param -x &lt;extension&gt; optional file extension to be appended to output files.
+ * @param -X &lt;extension&gt; optional file extension to be appended to error files
+ * @param &lt;document file&gt; 1 or more paths to well formed xml input files or stdin
+ * 
  * @author Damian Murphy
  */
 public class BulkXpathExecutor {
