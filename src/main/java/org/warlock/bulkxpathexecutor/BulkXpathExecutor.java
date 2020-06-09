@@ -53,27 +53,42 @@ import org.warlock.util.CfHNamespaceContext;
 import org.xml.sax.InputSource;
 
 /**
- * Usage: java -jar BulkXpathExecutor.jar -p pathsfile [ -r datafile ] [ -m ] [ -M ] [ -f ] [ -t ] [ -o outputfile ] [ -e errorfile ] [ -x extension ] [ -X extension ] [ documentfile+ | - ]
- * 
- * Takes well formed xml input files and bulk modifies and outputs them as well formed modified xml files according to data in paths and data files.
- * 
- * @param -p &lt;paths file&gt; tab separated file containing pairs of identifiers and xpaths. Comments start with #. Associates an identifier with an xpath
- * @param -r &lt;data file&gt; optional tab separated file containing pairs of identifiers and data values to be assigned to those identifiers. Comments start with #. Associates an identifier with a value to be applied in output file.
- * @param -m optional set in memory output Outputs are written to lists of string (for using this jar as a library)
- * @param -M optional set in memory error Errors are written to lists of string (for using this jar as a library)
+ * Usage: java -jar BulkXpathExecutor.jar -p pathsfile [ -r datafile ]* [ -m ] [
+ * -M ] [ -f ] [ -t ] [ -o outputfile ] [ -e errorfile ] [ -x extension ] [ -X
+ * extension ] [ documentfile+ | - ]
+ *
+ * Takes well formed xml input files and bulk modifies and outputs them as well
+ * formed modified xml files according to data in paths and data files.
+ *
+ * @param -p &lt;paths file&gt; tab separated file containing pairs of
+ * identifiers and xpaths. Comments start with #. Associates an identifier with
+ * an xpath
+ * @param -r &lt;data file&gt; optional (0..n) tab separated file containing
+ * pairs of identifiers and data values to be assigned to those identifiers.
+ * Comments start with #. Associates an identifier with a value to be applied in
+ * output file.
+ * @param -m optional set in memory output Outputs are written to lists of
+ * string (for using this jar as a library)
+ * @param -M optional set in memory error Errors are written to lists of string
+ * (for using this jar as a library)
  * @param -f optional prepend filename to error
  * @param -t optional include a timestamp with the error
- * @param -o optional &lt;output file&gt; path to file to which modified xml file is to be output
- * @param -e optional &lt;error file&gt; path to file to which modification errors are to be output
- * @param -x &lt;extension&gt; optional file extension to be appended to output files.
- * @param -X &lt;extension&gt; optional file extension to be appended to error files
- * @param &lt;document file&gt; 1 or more paths to well formed xml input files or stdin
- * 
+ * @param -o optional &lt;output file&gt; path to file to which modified xml
+ * file is to be output
+ * @param -e optional &lt;error file&gt; path to file to which modification
+ * errors are to be output
+ * @param -x &lt;extension&gt; optional file extension to be appended to output
+ * files.
+ * @param -X &lt;extension&gt; optional file extension to be appended to error
+ * files
+ * @param &lt;document file&gt; 1 or more paths to well formed xml input files
+ * or stdin
+ *
  * @author Damian Murphy
  */
 public class BulkXpathExecutor {
 
-    private static final String USAGE = "Usage: java -jar BulkXpathExecutor.jar -p pathsfile [ -r datafile ] [ -m ] [ -M ] [ -f ] [ -t ] [ -o outputfile ] [ -e errorfile ] [ -x extension ] [ -X extension ] [ documentfile | - ]";
+    private static final String USAGE = "Usage: java -jar BulkXpathExecutor.jar -p pathsfile [ -r datafile ]* [ -m ] [ -M ] [ -f ] [ -t ] [ -o outputfile ] [ -e errorfile ] [ -x extension ] [ -X extension ] [ documentfile | - ]";
     private HashMap<String, DescribedXPath> expressions = new HashMap<>();
     private HashMap<String, ArrayList<String>> substitutions = null;
     private NamespaceContext nhsdNS = CfHNamespaceContext.getXMLNamespaceContext();
@@ -93,9 +108,8 @@ public class BulkXpathExecutor {
      */
     public static void main(String[] args) {
         String paths = null;
-        String data = null;
+        ArrayList<String> datafiles = new ArrayList<>();
         ArrayList<String> doc = new ArrayList<>();
-        String outfile = null;
         OutputManager om = new OutputManager();
         try {
             for (int i = 0; i < args.length; i++) {
@@ -106,7 +120,7 @@ public class BulkXpathExecutor {
                 }
                 if (args[i].contentEquals("-r")) {
                     ++i;
-                    data = args[i];
+                    datafiles.add(args[i]);
                     continue;
                 }
                 if (args[i].contentEquals("-o")) {
@@ -160,15 +174,15 @@ public class BulkXpathExecutor {
             System.err.println(USAGE);
             System.exit(1);
         }
-        if (data == null) {
+        if (datafiles == null || datafiles.isEmpty()) {
             System.out.println("Using " + paths + " to extract content from " + doc);
         } else {
-            System.out.println("Substituting locations " + paths + " in " + doc + " with " + data);
+            System.out.println("Substituting locations " + paths + " in " + doc + " with " + String.join(",", datafiles));
         }
         try {
             BulkXpathExecutor bxe = new BulkXpathExecutor(paths);
             bxe.setOutputManager(om);
-            bxe.setData(data);
+            bxe.setData(datafiles.toArray(new String[datafiles.size()]));
             bxe.processDocuments(doc);
             ArrayList<String> errors = bxe.getOutputManager().getErrors();
             if ((errors != null) && (!errors.isEmpty())) {
@@ -184,7 +198,7 @@ public class BulkXpathExecutor {
 
     /**
      *
-     * @param paths
+     * @param paths String path to paths file
      * @throws Exception
      */
     private BulkXpathExecutor(String paths)
@@ -201,8 +215,12 @@ public class BulkXpathExecutor {
         String line = null;
         XPathFactory xpf = XPathFactory.newInstance();
         while ((line = br.readLine()) != null) {
+            // email style terminator for use with streams
             if (line.contentEquals(".")) {
                 break;
+            }
+            if (line.trim().isEmpty() || line.trim().startsWith("#")) {
+                continue;
             }
             if (line.contains("\t")) {
                 String[] s = line.split("\t");
@@ -229,47 +247,55 @@ public class BulkXpathExecutor {
         return outputManager;
     }
 
-    private void processDocuments(ArrayList<String> d)
+    /**
+     *
+     * @param documents ArrayList<STring> paths to documents files
+     * @throws Exception
+     */
+    private void processDocuments(ArrayList<String> documents)
             throws Exception {
         if (outputManager == null) {
             outputManager = new OutputManager();
         }
 
-        for (String s : d) {
-            outputManager.setCurrentFile(s);
-            process(s);
+        for (String document : documents) {
+            outputManager.setCurrentFile(document);
+            process(document);
         }
     }
 
     /**
      *
-     * @param d
+     * @param datafiles String[] of data files
      * @throws Exception
      */
-    private void setData(String d)
+    private void setData(String[] datafiles)
             throws Exception {
-        if (d == null) {
+
+        if (datafiles == null || datafiles.length == 0) {
             return;
         }
 
         substitutions = new HashMap<>();
-        BufferedReader br = new BufferedReader(new FileReader(d));
-        @SuppressWarnings("UnusedAssignment")
-        String line = null;
-        while ((line = br.readLine()) != null) {
-            if (line.startsWith("#")) {
-                continue;
-            }
-            String[] s = line.split("\t");
-            ArrayList<String> list = new ArrayList<>();
-            for (int i = 1; i < s.length; i++) {
-                if (s[i].startsWith("$")) {
-                    list.add(resolveFunction(s[i]).trim());
-                } else {
-                    list.add(s[i]);
+        for (String datafile : datafiles) {
+            BufferedReader br = new BufferedReader(new FileReader(datafile));
+            @SuppressWarnings("UnusedAssignment")
+            String line = null;
+            while ((line = br.readLine()) != null) {
+                if (line.trim().isEmpty() || line.trim().startsWith("#")) {
+                    continue;
                 }
+                String[] s = line.split("\t");
+                ArrayList<String> list = new ArrayList<>();
+                for (int i = 1; i < s.length; i++) {
+                    if (s[i].startsWith("$")) {
+                        list.add(resolveFunction(s[i]).trim());
+                    } else {
+                        list.add(s[i]);
+                    }
+                }
+                substitutions.put(s[0], list);
             }
-            substitutions.put(s[0], list);
         }
     }
 
@@ -282,7 +308,7 @@ public class BulkXpathExecutor {
         if (s.contentEquals(RESERVED_WORD_DATE)) {
             return ISO8601DATE.format(new Date());
         }
-        // $TODAY is a timestamp starting at 00:00:00 on morning of the day in question
+        // $TODAY is a timestamp starting at 00:00:00 today.
         if (s.contentEquals(RESERVED_WORD_TODAY)) {
             Calendar cal = new GregorianCalendar();
             cal.set(Calendar.HOUR_OF_DAY, 0);
@@ -309,6 +335,12 @@ public class BulkXpathExecutor {
         return s;
     }
 
+    /**
+     *
+     * @param spec String specification of date or time eg $TODAYPT9H
+     * @param dt date or time boolean true means date
+     * @return resolved time/date string
+     */
     private String resolveOffset(String spec, boolean dt) {
 
         String d = null;
@@ -338,9 +370,13 @@ public class BulkXpathExecutor {
         return t.substring(0, t.indexOf("T"));
     }
 
+    /**
+     *
+     * @param doc String containing path to xml document
+     * @throws Exception
+     */
     private void process(String doc)
             throws Exception {
-        boolean streamOutput = true;
 
         @SuppressWarnings("UnusedAssignment")
         Document d = getDocument(doc);
@@ -348,9 +384,10 @@ public class BulkXpathExecutor {
             DescribedXPath xp = expressions.get(s);
             XPathExpression exp = xp.getExpression();
             NodeList nl = (NodeList) exp.evaluate(d, XPathConstants.NODESET);
+            // no substitutions ie no data file so generate datafile like output
             if (substitutions == null) {
                 StringBuilder sb = new StringBuilder(s);
-                sb.append(System.getProperty("line.separator"));
+                //sb.append(System.getProperty("line.separator"));
                 for (int i = 0; i < nl.getLength(); i++) {
                     Node n = nl.item(i);
                     String nsuri = n.getNamespaceURI();
@@ -359,57 +396,72 @@ public class BulkXpathExecutor {
                         sb.append(":");
                     }
                     if (n.getNodeType() == Node.ATTRIBUTE_NODE) {
-                        sb.append("@");
+                        //sb.append("@");
                     }
-                    sb.append(n.getNodeName());
+                    //sb.append(n.getNodeName());
                     sb.append("\t");
                     sb.append(n.getNodeValue());
-                    sb.append(System.getProperty("line.separator"));
+                    // sb.append(System.getProperty("line.separator"));
                 }
                 outputManager.output(sb.toString());
             } else {
+                // substitutions driven by datafile
                 ArrayList<String> subs = substitutions.get(s);
-                if (subs == null) {
+                if (subs == null || subs.isEmpty()) {
                     continue;
                 }
                 for (int i = 0; i < nl.getLength(); i++) {
                     Node n = nl.item(i);
+                    String v = null;
                     try {
-                        String v = subs.get(i);
-                        if (v.startsWith("xmlfragment:")) {
-                            if (n.getNodeType() == Node.ELEMENT_NODE) {
-                                Element elem = getElement(v.substring("xmlfragment:".length()));
-                                elem = (Element) d.importNode(elem, true);
-                                n.getParentNode().replaceChild(elem, n);
+                        v = subs.get(i);
+                    } catch (IndexOutOfBoundsException e) {
+                        v = subs.get(0);
+                        if (v == null || v.trim().isEmpty()) {
+                            n.setNodeValue("");
+                            continue;
+                        }
+                    }
+                    if (v.startsWith("xmlfragment:")) {
+                        if (n.getNodeType() == Node.ELEMENT_NODE) {
+                            Element elem = getElement(v.substring("xmlfragment:".length()));
+                            elem = (Element) d.importNode(elem, true);
+                            n.getParentNode().replaceChild(elem, n);
+                        } else {
+                            StringBuilder erep = new StringBuilder("WARNING: Ignoring substitution. Attempt to substitute XML fragment ");
+                            erep.append(v.substring("xmlfragment:".length()));
+                            erep.append(" into non-element location ");
+                            erep.append(xp.getXpath());
+                            erep.append(": XML fragment substitutions can only be made into elements.");
+                            outputManager.error(erep.toString());
+                        }
+                    } else {
+                        if (v.startsWith("$")) {
+                            String r = v.substring(1);
+                            ArrayList<String> vs = substitutions.get(r);
+                            if (vs != null) {
+                                try {
+                                    v = vs.get(i);
+                                } catch (IndexOutOfBoundsException e) {
+                                    v = vs.get(0);
+                                }
+                                if (v != null && !v.trim().isEmpty()) {
+                                    n.setNodeValue(v);
+                                } else {
+                                    n.setNodeValue("");
+                                }
+
                             } else {
-                                StringBuilder erep = new StringBuilder("WARNING: Ignoring substitution. Attempt to substitute XML fragment ");
-                                erep.append(v.substring("xmlfragment:".length()));
-                                erep.append(" into non-element location ");
-                                erep.append(xp.getXpath());
-                                erep.append(": XML fragment substitutions can only be made into elements.");
+                                StringBuilder erep = new StringBuilder("WARNING: Ignoring substitution. Label ");
+                                erep.append(s);
+                                erep.append(" references another: ");
+                                erep.append(v);
+                                erep.append(" which is not defined.");
                                 outputManager.error(erep.toString());
                             }
                         } else {
-                            if (v.startsWith("$")) {
-                                String r = v.substring(1);
-                                ArrayList<String> vs = substitutions.get(r);
-                                if (vs != null) {
-                                    v = vs.get(i);
-                                    n.setNodeValue(v);
-                                } else {
-                                    StringBuilder erep = new StringBuilder("WARNING: Ignoring substitution. Label ");
-                                    erep.append(s);
-                                    erep.append(" references another: ");
-                                    erep.append(v);
-                                    erep.append(" which is not defined.");
-                                    outputManager.error(erep.toString());
-                                }
-                            } else {
-                                n.setNodeValue(v);
-                            }
+                            n.setNodeValue(v);
                         }
-                    } catch (IndexOutOfBoundsException e) {
-                        n.setNodeValue("");
                     }
                 }
             }
@@ -419,12 +471,24 @@ public class BulkXpathExecutor {
         }
     }
 
+    /**
+     *
+     * @param s xpath to element
+     * @return populated Element object
+     * @throws Exception
+     */
     private Element getElement(String s)
             throws Exception {
         Element elem = parse(s).getDocumentElement();
         return elem;
     }
 
+    /**
+     * serialises a Document object
+     *
+     * @param doc Document object
+     * @return Serialised String
+     */
     private String getStringFromDoc(Document doc) {
         DOMImplementationLS domImplementation = (DOMImplementationLS) doc.getImplementation();
         LSSerializer lsSerializer = domImplementation.createLSSerializer();
@@ -432,6 +496,13 @@ public class BulkXpathExecutor {
         return lsSerializer.writeToString(doc);
     }
 
+    /**
+     * parse a string containg xml into a Document object
+     *
+     * @param s
+     * @return Document object
+     * @throws Exception
+     */
     private Document parse(String s)
             throws Exception {
         InputSource is = new InputSource(new StringReader(s));
@@ -443,6 +514,12 @@ public class BulkXpathExecutor {
         return xml;
     }
 
+    /**
+     *
+     * @param d String containing path to document file
+     * @return populated Document object
+     * @throws Exception
+     */
     private Document getDocument(String d)
             throws Exception {
         StringBuilder sb = new StringBuilder();
