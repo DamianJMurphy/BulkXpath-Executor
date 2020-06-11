@@ -1,5 +1,6 @@
 #
-# data file for providing content to be inserted into xml template files
+#  Bulk xpath executor data file for providing content to be inserted into xml template files
+#  NB This file is tab separated into two fields
 #
 P1	plain text
 P2	$P1
@@ -7,4 +8,5 @@ P3	$DATE
 #D1	$TIMEP1DT1H1M
 D1	$TODAYPT9H
 D2	$DATEP1DT1H1M
-C1	xmlfragment: <fhir:a xmlns:fhir="http://hl7.org/fhir">xxx</fhir:a>
+#C1	xmlfragment: <fhir:a xmlns:fhir="http://hl7.org/fhir">xxx</fhir:a>
+#C1	$DELETE

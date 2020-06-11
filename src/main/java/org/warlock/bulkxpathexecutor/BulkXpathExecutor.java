@@ -102,6 +102,7 @@ public class BulkXpathExecutor {
     private static final String RESERVED_WORD_TODAY = "$TODAY";
     private static final String RESERVED_WORD_DATE = "$DATE";
     private static final String RESERVED_WORD_TIME = "$TIME";
+    private static final String RESERVED_WORD_DELETE = "$DELETE";
 
     /**
      * @param args the command line arguments
@@ -197,6 +198,7 @@ public class BulkXpathExecutor {
     }
 
     /**
+     * reads paths file and populates expressions
      *
      * @param paths String path to paths file
      * @throws Exception
@@ -248,8 +250,9 @@ public class BulkXpathExecutor {
     }
 
     /**
+     * iterates through documents and processes them
      *
-     * @param documents ArrayList<STring> paths to documents files
+     * @param documents ArrayList&lt;String&gt; paths to documents files
      * @throws Exception
      */
     private void processDocuments(ArrayList<String> documents)
@@ -265,6 +268,7 @@ public class BulkXpathExecutor {
     }
 
     /**
+     * itarates through data files and populates substitutions
      *
      * @param datafiles String[] of data files
      * @throws Exception
@@ -299,6 +303,12 @@ public class BulkXpathExecutor {
         }
     }
 
+    /**
+     * evaluates reserved words
+     *
+     * @param s name of reserved word
+     * @return evaluates substitution
+     */
     private String resolveFunction(String s) {
 
         // TODO: Add ISO8601 duration offsets to $TIME and $DATE
@@ -371,6 +381,7 @@ public class BulkXpathExecutor {
     }
 
     /**
+     * processes input document
      *
      * @param doc String containing path to xml document
      * @throws Exception
@@ -412,7 +423,11 @@ public class BulkXpathExecutor {
                 }
                 for (int i = 0; i < nl.getLength(); i++) {
                     Node n = nl.item(i);
+                    
                     String v = null;
+                    // There can be > 1 substitutions to match multiple matches but if there aren't just use the first one
+                    // and if there isnt one at all set an empty string. This is not fhir valid xml but that will be trapped
+                    // by subsequent fhir validation
                     try {
                         v = subs.get(i);
                     } catch (IndexOutOfBoundsException e) {
@@ -437,6 +452,16 @@ public class BulkXpathExecutor {
                         }
                     } else {
                         if (v.startsWith("$")) {
+                            if (v.equals(RESERVED_WORD_DELETE)) {
+                                if (n.getParentNode() != null) {
+                                    // System.err.println("Deleting " + n.getLocalName() + " "+ n.getAttributes().getNamedItem("value"));
+                                    // n needs to be an element not an attribute. Attributes don't have parents
+                                    n.getParentNode().removeChild(n);
+                                } else {
+                                    outputManager.error("Failed to delete " + n.getLocalName()+" no parent ");
+                                }
+                                continue;
+                            }
                             String r = v.substring(1);
                             ArrayList<String> vs = substitutions.get(r);
                             if (vs != null) {
@@ -497,7 +522,7 @@ public class BulkXpathExecutor {
     }
 
     /**
-     * parse a string containg xml into a Document object
+     * parse a string containing xml into a Document object
      *
      * @param s
      * @return Document object
@@ -517,7 +542,7 @@ public class BulkXpathExecutor {
     /**
      *
      * @param d String containing path to document file
-     * @return populated Document object
+     * @return populated xml Document object
      * @throws Exception
      */
     private Document getDocument(String d)
