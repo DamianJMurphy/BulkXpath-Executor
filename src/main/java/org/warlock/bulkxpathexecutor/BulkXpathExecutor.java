@@ -34,6 +34,7 @@ import java.util.Calendar;
 import java.util.Date;
 import java.util.GregorianCalendar;
 import java.util.HashMap;
+import java.util.TreeMap;
 import java.util.UUID;
 import javax.xml.namespace.NamespaceContext;
 import javax.xml.parsers.DocumentBuilder;
@@ -268,7 +269,7 @@ public class BulkXpathExecutor {
     }
 
     /**
-     * itarates through data files and populates substitutions
+     * iterates through data files and populates substitutions
      *
      * @param datafiles String[] of data files
      * @throws Exception
@@ -391,106 +392,116 @@ public class BulkXpathExecutor {
 
         @SuppressWarnings("UnusedAssignment")
         Document d = getDocument(doc);
-        for (String s : expressions.keySet()) {
-            DescribedXPath xp = expressions.get(s);
-            XPathExpression exp = xp.getExpression();
-            NodeList nl = (NodeList) exp.evaluate(d, XPathConstants.NODESET);
-            // no substitutions ie no data file so generate datafile like output
-            if (substitutions == null) {
-                StringBuilder sb = new StringBuilder(s);
-                //sb.append(System.getProperty("line.separator"));
-                for (int i = 0; i < nl.getLength(); i++) {
-                    Node n = nl.item(i);
-                    String nsuri = n.getNamespaceURI();
-                    if (nsuri != null) {
-                        sb.append(nsuri);
-                        sb.append(":");
-                    }
-                    if (n.getNodeType() == Node.ATTRIBUTE_NODE) {
-                        //sb.append("@");
-                    }
-                    //sb.append(n.getNodeName());
-                    sb.append("\t");
-                    sb.append(n.getNodeValue());
-                    // sb.append(System.getProperty("line.separator"));
-                }
-                outputManager.output(sb.toString());
-            } else {
-                // substitutions driven by datafile
-                ArrayList<String> subs = substitutions.get(s);
-                if (subs == null || subs.isEmpty()) {
-                    continue;
-                }
-                for (int i = 0; i < nl.getLength(); i++) {
-                    Node n = nl.item(i);
-                    
-                    String v = null;
-                    // There can be > 1 substitutions to match multiple matches but if there aren't just use the first one
-                    // and if there isnt one at all set an empty string. This is not fhir valid xml but that will be trapped
-                    // by subsequent fhir validation
-                    try {
-                        v = subs.get(i);
-                    } catch (IndexOutOfBoundsException e) {
-                        v = subs.get(0);
-                        if (v == null || v.trim().isEmpty()) {
-                            n.setNodeValue("");
+        HashMap<String, NodeList> nodelists = new HashMap<>();
+        // first pass constructs and caches all the nodelists, the second pass makes the substitutions.
+        // This avoids conflicts around modifying a dom that you are still querying
+        for (int pass = 0; pass < 2; pass++) {
+            for (String expression : expressions.keySet()) {
+                DescribedXPath xp = expressions.get(expression);
+                if (pass == 0) {
+                    XPathExpression exp = xp.getExpression();
+                    NodeList nl = (NodeList) exp.evaluate(d, XPathConstants.NODESET);
+                    nodelists.put(expression, nl);
+                } else {
+                    // no substitutions ie no data file so generate datafile like output
+                    NodeList nl = nodelists.get(expression);
+                    if (substitutions == null) {
+                        StringBuilder sb = new StringBuilder(expression);
+                        //sb.append(System.getProperty("line.separator"));
+                        for (int i = 0; i < nl.getLength(); i++) {
+                            Node n = nl.item(i);
+                            String nsuri = n.getNamespaceURI();
+                            if (nsuri != null) {
+                                sb.append(nsuri);
+                                sb.append(":");
+                            }
+                            if (n.getNodeType() == Node.ATTRIBUTE_NODE) {
+                                //sb.append("@");
+                            }
+                            //sb.append(n.getNodeName());
+                            sb.append("\t");
+                            sb.append(n.getNodeValue());
+                            // sb.append(System.getProperty("line.separator"));
+                        }
+                        outputManager.output(sb.toString());
+                    } else {
+                        // substitutions driven by datafile
+                        ArrayList<String> subs = substitutions.get(expression);
+                        if (subs == null || subs.isEmpty()) {
                             continue;
                         }
-                    }
-                    if (v.startsWith("xmlfragment:")) {
-                        if (n.getNodeType() == Node.ELEMENT_NODE) {
-                            Element elem = getElement(v.substring("xmlfragment:".length()));
-                            elem = (Element) d.importNode(elem, true);
-                            n.getParentNode().replaceChild(elem, n);
-                        } else {
-                            StringBuilder erep = new StringBuilder("WARNING: Ignoring substitution. Attempt to substitute XML fragment ");
-                            erep.append(v.substring("xmlfragment:".length()));
-                            erep.append(" into non-element location ");
-                            erep.append(xp.getXpath());
-                            erep.append(": XML fragment substitutions can only be made into elements.");
-                            outputManager.error(erep.toString());
-                        }
-                    } else {
-                        if (v.startsWith("$")) {
-                            if (v.equals(RESERVED_WORD_DELETE)) {
-                                if (n.getParentNode() != null) {
-                                    // System.err.println("Deleting " + n.getLocalName() + " "+ n.getAttributes().getNamedItem("value"));
-                                    // n needs to be an element not an attribute. Attributes don't have parents
-                                    n.getParentNode().removeChild(n);
-                                } else {
-                                    outputManager.error("Failed to delete " + n.getLocalName()+" no parent ");
-                                }
-                                continue;
-                            }
-                            String r = v.substring(1);
-                            ArrayList<String> vs = substitutions.get(r);
-                            if (vs != null) {
-                                try {
-                                    v = vs.get(i);
-                                } catch (IndexOutOfBoundsException e) {
-                                    v = vs.get(0);
-                                }
-                                if (v != null && !v.trim().isEmpty()) {
-                                    n.setNodeValue(v);
-                                } else {
-                                    n.setNodeValue("");
-                                }
+                        for (int i = 0; i < nl.getLength(); i++) {
+                            Node n = nl.item(i);
 
-                            } else {
-                                StringBuilder erep = new StringBuilder("WARNING: Ignoring substitution. Label ");
-                                erep.append(s);
-                                erep.append(" references another: ");
-                                erep.append(v);
-                                erep.append(" which is not defined.");
-                                outputManager.error(erep.toString());
+                            String v = null;
+                            // There can be > 1 substitutions to match multiple matches but if there aren't just use the first one
+                            // and if there isnt one at all set an empty string. This is not fhir valid xml but that will be trapped
+                            // by subsequent fhir validation
+                            try {
+                                v = subs.get(i);
+                            } catch (IndexOutOfBoundsException e) {
+                                v = subs.get(0);
+                                if (v == null || v.trim().isEmpty()) {
+                                    n.setNodeValue("");
+                                    continue;
+                                }
                             }
-                        } else {
-                            n.setNodeValue(v);
-                        }
-                    }
-                }
-            }
-        }
+                            if (v.startsWith("xmlfragment:")) {
+                                if (n.getNodeType() == Node.ELEMENT_NODE) {
+                                    Element elem = getElement(v.substring("xmlfragment:".length()));
+                                    elem = (Element) d.importNode(elem, true);
+                                    n.getParentNode().replaceChild(elem, n);
+                                } else {
+                                    StringBuilder erep = new StringBuilder("WARNING: Ignoring substitution. Attempt to substitute XML fragment ");
+                                    erep.append(v.substring("xmlfragment:".length()));
+                                    erep.append(" into non-element location ");
+                                    erep.append(xp.getXpath());
+                                    erep.append(": XML fragment substitutions can only be made into elements.");
+                                    outputManager.error(erep.toString());
+                                }
+                            } else {
+                                if (v.startsWith("$")) {
+                                    if (v.equals(RESERVED_WORD_DELETE)) {
+                                        if (n.getParentNode() != null) {
+                                            // System.err.println("Deleting " + n.getLocalName() + " "+ n.getAttributes().getNamedItem("value"));
+                                            // n needs to be an element not an attribute. Attributes don't have parents
+                                            n.getParentNode().removeChild(n);
+                                        } else {
+                                            outputManager.error("Failed to delete " + n.getLocalName() + " no parent ");
+                                        }
+                                        continue;
+                                    }
+                                    String r = v.substring(1);
+                                    ArrayList<String> vs = substitutions.get(r);
+                                    if (vs != null) {
+                                        try {
+                                            v = vs.get(i);
+                                        } catch (IndexOutOfBoundsException e) {
+                                            v = vs.get(0);
+                                        }
+                                        if (v != null && !v.trim().isEmpty()) {
+                                            n.setNodeValue(v);
+                                        } else {
+                                            n.setNodeValue("");
+                                        }
+
+                                    } else {
+                                        StringBuilder erep = new StringBuilder("WARNING: Ignoring substitution. Label ");
+                                        erep.append(expression);
+                                        erep.append(" references another: ");
+                                        erep.append(v);
+                                        erep.append(" which is not defined.");
+                                        outputManager.error(erep.toString());
+                                    }
+                                } else {
+                                    n.setNodeValue(v);
+                                }
+                            } // if xml fragment
+                        } // for nodelist
+                    } // there exist substitutions
+                } // second pass
+            } // for expression
+        } // for pass
         if (substitutions != null) {
             outputManager.output(getStringFromDoc(d));
         }
