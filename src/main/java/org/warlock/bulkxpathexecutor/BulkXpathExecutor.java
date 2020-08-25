@@ -16,6 +16,7 @@
 package org.warlock.bulkxpathexecutor;
 
 import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
 import java.io.FileInputStream;
 import java.io.FileReader;
 import java.io.InputStream;
@@ -29,6 +30,8 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
+import java.time.temporal.TemporalUnit;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
@@ -104,6 +107,7 @@ public class BulkXpathExecutor {
     private static final String RESERVED_WORD_DATE = "$DATE";
     private static final String RESERVED_WORD_TIME = "$TIME";
     private static final String RESERVED_WORD_DELETE = "$DELETE";
+    private static final String RESERVED_WORD_VALUEDATEOFFSET = "$VALUEDATEOFFSET";
 
     /**
      * @param args the command line arguments
@@ -354,21 +358,21 @@ public class BulkXpathExecutor {
      */
     private String resolveOffset(String spec, boolean dt) {
 
-        String d = null;
+        String durationStr = null;
         Instant now = null;
         if (spec.startsWith(RESERVED_WORD_TODAY)) {
-            d = spec.substring(RESERVED_WORD_TODAY.length()).trim();
+            durationStr = spec.substring(RESERVED_WORD_TODAY.length()).trim();
             LocalTime midnight = LocalTime.MIDNIGHT;
             LocalDate today = LocalDate.now(ZoneId.of("Europe/London"));
             LocalDateTime todayMidnight = LocalDateTime.of(today, midnight);
             // TODO I don't understand why this appears to work during BST
             now = todayMidnight.toInstant(ZoneOffset.UTC);
         } else {
-            d = spec.substring(RESERVED_WORD_TIME.length()).trim();
+            durationStr = spec.substring(RESERVED_WORD_TIME.length()).trim();
             now = Instant.now();
         }
 
-        Duration offset = Duration.parse(d);
+        Duration offset = Duration.parse(durationStr);
 
         @SuppressWarnings("UnusedAssignment")
         Instant then = null;
@@ -470,6 +474,23 @@ public class BulkXpathExecutor {
                                             outputManager.error("Failed to delete " + n.getLocalName() + " no parent ");
                                         }
                                         continue;
+                                    } else if (v.startsWith(RESERVED_WORD_VALUEDATEOFFSET)) {
+                                        // applies a date offset to the date part of the source document field. the string may be a date only or date time field with trailing chars
+                                        // but the duration must be days only with no hours, mins or secs
+                                        String dateStr = n.getNodeValue();
+                                        // see https://www.hl7.org/fhir/datatypes.html#dateTime
+                                        if (dateStr.matches("^([0-9]([0-9]([0-9][1-9]|[1-9]0)|[1-9]00)|[1-9]000)(-(0[1-9]|1[0-2])(-(0[1-9]|[1-2][0-9]|3[0-1])(T([01][0-9]|2[0-3]):[0-5][0-9]:([0-5][0-9]|60)(\\.[0-9]+)?(Z|(\\+|-)((0[0-9]|1[0-3]):[0-5][0-9]|14:00)))?)?)?$")) {
+                                            final int DATE_LENGTH = 10;
+                                            String durationsStr = v.substring(RESERVED_WORD_VALUEDATEOFFSET.length()).trim();
+                                            Duration duration = Duration.parse(durationsStr);
+                                            LocalDate localDate = LocalDate.parse(dateStr.substring(0, DATE_LENGTH));
+                                            localDate = localDate.plus(duration.toDays(), ChronoUnit.DAYS);
+                                            dateStr = dateStr.replaceFirst("^.{" + DATE_LENGTH + "}", localDate.toString().substring(0, DATE_LENGTH));
+                                            n.setNodeValue(dateStr);
+                                        } else {
+                                            outputManager.error("Failed to parse malformed date string " + dateStr + " at node " + n.getLocalName());
+                                        }
+                                        continue;
                                     }
                                     String r = v.substring(1);
                                     ArrayList<String> vs = substitutions.get(r);
@@ -566,12 +587,15 @@ public class BulkXpathExecutor {
         } else {
             in = new FileInputStream(d);
         }
-        BufferedReader br = new BufferedReader(new InputStreamReader(in));
-        @SuppressWarnings("UnusedAssignment")
-        String line = null;
-        while ((line = br.readLine()) != null) {
-            sb.append(line);
+
+        // changed from bufferedread terminated by n/l since we have some attributes with embedded newlines
+        ByteArrayOutputStream result = new ByteArrayOutputStream();
+        byte[] buffer = new byte[1024];
+        int length;
+        while ((length = in.read(buffer)) != -1) {
+            result.write(buffer, 0, length);
         }
-        return parse(sb.toString());
+        in.close();
+        return parse(result.toString("UTF-8"));
     }
 }
