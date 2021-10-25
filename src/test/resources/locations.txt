@@ -1,7 +1,7 @@
 #
 #  Bulk xpath executor paths file
 #  NB This file tab separated into two fields
-#
+# <location_label> <xpath to location>
 P1	/fhir:Bundle[1]/fhir:entry[1]/fhir:resource[1]/fhir:Condition[1]/fhir:id[1]/@value
 P2	/fhir:Bundle[1]/fhir:entry[2]/fhir:resource[1]/fhir:Condition[1]/fhir:id[1]/@value
 P3	/fhir:Bundle[1]/fhir:entry[3]/fhir:resource[1]/fhir:Condition[1]/fhir:id[1]/@value

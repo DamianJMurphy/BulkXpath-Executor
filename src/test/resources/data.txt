@@ -1,7 +1,7 @@
 #
 #  Bulk xpath executor data file for providing content to be inserted into xml template files
 #  NB This file is tab separated into two fields
-#
+# <location label> <value to be applied>
 P1	plain text
 P2	$P1
 P3	$DATE
