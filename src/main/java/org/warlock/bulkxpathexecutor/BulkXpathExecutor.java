@@ -31,13 +31,12 @@ import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
-import java.time.temporal.TemporalUnit;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.GregorianCalendar;
 import java.util.HashMap;
-import java.util.TreeMap;
+import java.util.TimeZone;
 import java.util.UUID;
 import javax.xml.namespace.NamespaceContext;
 import javax.xml.parsers.DocumentBuilder;
@@ -53,8 +52,8 @@ import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 import org.w3c.dom.ls.DOMImplementationLS;
 import org.w3c.dom.ls.LSSerializer;
-import org.warlock.util.CfHNamespaceContext;
 import org.xml.sax.InputSource;
+import uk.nhs.digital.mait.commonutils.util.CfHNamespaceContext;
 
 /**
  * Usage: java -jar BulkXpathExecutor.jar -p pathsfile [ -r datafile ]* [ -m ] [
@@ -484,8 +483,24 @@ public class BulkXpathExecutor {
                                             String durationsStr = v.substring(RESERVED_WORD_VALUEDATEOFFSET.length()).trim();
                                             Duration duration = Duration.parse(durationsStr);
                                             LocalDate localDate = LocalDate.parse(dateStr.substring(0, DATE_LENGTH));
+                                            
+                                            // bump the date
                                             localDate = localDate.plus(duration.toDays(), ChronoUnit.DAYS);
+
+                                            // replace the initial date part
                                             dateStr = dateStr.replaceFirst("^.{" + DATE_LENGTH + "}", localDate.toString().substring(0, DATE_LENGTH));
+                                            
+                                            if (dateStr.matches("^.*\\+0[01]:00$")) {
+                                                // if there's a timezone string appended adjust the timezone for the time of year
+                                                Instant instant = localDate.atStartOfDay(ZoneId.systemDefault()).toInstant();
+                                                Date date = Date.from(instant);
+                                                if (TimeZone.getDefault().inDaylightTime(date)) {
+                                                    dateStr = dateStr.replaceFirst("\\+0[01]:00$", "\\+01:00");
+                                                } else {
+                                                    dateStr = dateStr.replaceFirst("\\+0[01]:00$", "\\+00:00");
+                                                }
+                                            }
+
                                             n.setNodeValue(dateStr);
                                         } else {
                                             outputManager.error("Failed to parse malformed date string " + dateStr + " at node " + n.getLocalName());
